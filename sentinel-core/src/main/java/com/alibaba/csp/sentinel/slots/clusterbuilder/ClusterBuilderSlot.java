@@ -44,6 +44,12 @@ import com.alibaba.csp.sentinel.spi.Spi;
  * default nodes.
  * </p>
  *
+ * 这个插槽维护资源运行统计(响应时间，qps，线程*计数，异常)，以及一个调用者列表
+ *
+ * ClusterBuilderSlot的职责比较简单，主要做了两件事：
+ * 一、为每个资源创建一个clusterNode，然后把clusterNode塞到DefaultNode中去
+ * 二、将clusterNode保持到全局的map中去，用资源作为map的key
+ * PS：一个资源只有一个ClusterNode，但是可以有多个DefaultNode
  * @author jialiang.linjl
  */
 @Spi(isSingleton = false, order = Constants.ORDER_CLUSTER_BUILDER_SLOT)
@@ -80,6 +86,7 @@ public class ClusterBuilderSlot extends AbstractLinkedProcessorSlot<DefaultNode>
         if (clusterNode == null) {
             synchronized (lock) {
                 if (clusterNode == null) {
+                    // 根据资源名、资源类型创建集群node
                     // Create the cluster node.
                     clusterNode = new ClusterNode(resourceWrapper.getName(), resourceWrapper.getResourceType());
                     HashMap<ResourceWrapper, ClusterNode> newMap = new HashMap<>(Math.max(clusterNodeMap.size(), 16));
@@ -95,8 +102,10 @@ public class ClusterBuilderSlot extends AbstractLinkedProcessorSlot<DefaultNode>
         /*
          * if context origin is set, we should get or create a new {@link Node} of
          * the specific origin.
+         * 如果设置了context origin，我们应该获取或创建一个特定起源的新
          */
         if (!"".equals(context.getOrigin())) {
+            // 获取或者创建该节点资源的RT、QPS、线程数等信息
             Node originNode = node.getClusterNode().getOrCreateOriginNode(context.getOrigin());
             context.getCurEntry().setOriginNode(originNode);
         }

@@ -71,6 +71,7 @@ public class FlowRule extends AbstractRule {
     private String refResource;
 
     /**
+     * 速率限制器控制行为：0：直接拒绝,1：warm up，2：速度限制器 3：warm up+速度限制器
      * Rate limiter control behavior.
      * 0. default(reject directly), 1. warm up, 2. rate limiter, 3. warm up + rate limiter
      */

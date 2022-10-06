@@ -132,10 +132,12 @@ public final class FlowRuleUtil {
     private static TrafficShapingController generateRater(/*@Valid*/ FlowRule rule) {
         if (rule.getGrade() == RuleConstant.FLOW_GRADE_QPS) {
             switch (rule.getControlBehavior()) {
+                // 冷机器，匀速上升，预热/冷启动
                 case RuleConstant.CONTROL_BEHAVIOR_WARM_UP:
                     return new WarmUpController(rule.getCount(), rule.getWarmUpPeriodSec(),
                             ColdFactorProperty.coldFactor);
                 case RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER:
+                    // 令牌桶实现
                     return new RateLimiterController(rule.getMaxQueueingTimeMs(), rule.getCount());
                 case RuleConstant.CONTROL_BEHAVIOR_WARM_UP_RATE_LIMITER:
                     return new WarmUpRateLimiterController(rule.getCount(), rule.getWarmUpPeriodSec(),
@@ -145,6 +147,7 @@ public final class FlowRuleUtil {
                     // Default mode or unknown mode: default traffic shaping controller (fast-reject).
             }
         }
+        // 根据流控类型和数值组装数据，滑动窗口
         return new DefaultController(rule.getCount(), rule.getGrade());
     }
 

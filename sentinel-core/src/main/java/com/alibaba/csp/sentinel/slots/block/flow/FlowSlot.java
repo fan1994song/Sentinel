@@ -135,6 +135,7 @@ import java.util.Map;
  * </p>
  * </ol>
  *
+ * https://blog.csdn.net/qq_33811736/article/details/119453868
  * @author jialiang.linjl
  * @author Eric Zhao
  */
@@ -161,6 +162,7 @@ public class FlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     @Override
     public void entry(Context context, ResourceWrapper resourceWrapper, DefaultNode node, int count,
                       boolean prioritized, Object... args) throws Throwable {
+        // 限流核心代码
         checkFlow(resourceWrapper, context, node, count, prioritized);
 
         fireEntry(context, resourceWrapper, node, count, prioritized, args);
@@ -180,6 +182,7 @@ public class FlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
         @Override
         public Collection<FlowRule> apply(String resource) {
             // Flow rule map should not be null.
+            // 获取某个资源名的流量控制信息
             Map<String, List<FlowRule>> flowRules = FlowRuleManager.getFlowRuleMap();
             return flowRules.get(resource);
         }

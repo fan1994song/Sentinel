@@ -28,17 +28,21 @@ import com.alibaba.csp.sentinel.util.StringUtil;
 final class AuthorityRuleChecker {
 
     static boolean passCheck(AuthorityRule rule, Context context) {
+        // 服务使用者名称或起源IP
         String requester = context.getOrigin();
 
         // Empty origin or empty limitApp will pass.
+        // 若origin为空或者limitApp为空
         if (StringUtil.isEmpty(requester) || StringUtil.isEmpty(rule.getLimitApp())) {
             return true;
         }
 
         // Do exact match with origin name.
+        // 查找配置的字符串中是否包含需要匹配的服务名
         int pos = rule.getLimitApp().indexOf(requester);
         boolean contain = pos > -1;
 
+        // 包含,再去分割匹配
         if (contain) {
             boolean exactlyMatch = false;
             String[] appArray = rule.getLimitApp().split(",");
@@ -53,10 +57,12 @@ final class AuthorityRuleChecker {
         }
 
         int strategy = rule.getStrategy();
+        // 包含limitAppId并且是黑名单，说明命中黑名单，需要block
         if (strategy == RuleConstant.AUTHORITY_BLACK && contain) {
             return false;
         }
 
+        // 不包含limitAppId并且是白名单类型，说明当前服务没有访问权限，需要block
         if (strategy == RuleConstant.AUTHORITY_WHITE && !contain) {
             return false;
         }

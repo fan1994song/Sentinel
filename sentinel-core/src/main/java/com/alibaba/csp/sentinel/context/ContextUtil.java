@@ -50,6 +50,8 @@ public class ContextUtil {
     private static ThreadLocal<Context> contextHolder = new ThreadLocal<>();
 
     /**
+     * 保存所有{@link EntranceNode}。每个{@link EntranceNode}都与一个不同的上下文名称相关联
+     *
      * Holds all {@link EntranceNode}. Each {@link EntranceNode} is associated with a distinct context name.
      */
     private static volatile Map<String, DefaultNode> contextNameNodeMap = new HashMap<>();
@@ -117,7 +119,14 @@ public class ContextUtil {
         return trueEnter(name, origin);
     }
 
+    /**
+     * 创建context
+     * @param name
+     * @param origin
+     * @return
+     */
     protected static Context trueEnter(String name, String origin) {
+        // 从threadlocal中获取
         Context context = contextHolder.get();
         if (context == null) {
             Map<String, DefaultNode> localCacheNameMap = contextNameNodeMap;
@@ -131,6 +140,7 @@ public class ContextUtil {
                     try {
                         node = contextNameNodeMap.get(name);
                         if (node == null) {
+                            // 双重check校验来创建contextNameNodeMap
                             if (contextNameNodeMap.size() > Constants.MAX_CONTEXT_NAME_SIZE) {
                                 setNullContext();
                                 return NULL_CONTEXT;
@@ -139,6 +149,7 @@ public class ContextUtil {
                                 // Add entrance node.
                                 Constants.ROOT.addChild(node);
 
+                                // 可能是为了避免扩容时限流策略中产生瓶颈，不然的话可以考虑concurrentHashMap
                                 Map<String, DefaultNode> newMap = new HashMap<>(contextNameNodeMap.size() + 1);
                                 newMap.putAll(contextNameNodeMap);
                                 newMap.put(name, node);

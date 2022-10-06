@@ -63,11 +63,13 @@ public class ResponseTimeCircuitBreaker extends AbstractCircuitBreaker {
 
     @Override
     public void onRequestComplete(Context context) {
+        // 获取当前慢请求时间窗口
         SlowRequestCounter counter = slidingCounter.currentWindow().value();
         Entry entry = context.getCurEntry();
         if (entry == null) {
             return;
         }
+        // 若rt大于设置的rt时间，增加慢请求数值、请求数值
         long completeTime = entry.getCompleteTimestamp();
         if (completeTime <= 0) {
             completeTime = TimeUtil.currentTimeMillis();
@@ -78,25 +80,31 @@ public class ResponseTimeCircuitBreaker extends AbstractCircuitBreaker {
         }
         counter.totalCount.add(1);
 
+        // 当超过阈值时处理状态变化
         handleStateChangeWhenThresholdExceeded(rt);
     }
 
     private void handleStateChangeWhenThresholdExceeded(long rt) {
+        // 开启状态，return
         if (currentState.get() == State.OPEN) {
             return;
         }
-        
+
+        // 若是半开状态
         if (currentState.get() == State.HALF_OPEN) {
             // In detecting request
             // TODO: improve logic for half-open recovery
+            // 超过最大响应时长，变回open状态，更新下次探测时间
             if (rt > maxAllowedRt) {
                 fromHalfOpenToOpen(1.0d);
             } else {
+                // 关闭断路器，正常提供服务
                 fromHalfOpenToClose();
             }
             return;
         }
 
+        // 获取请求总数、慢请求数
         List<SlowRequestCounter> counters = slidingCounter.values();
         long slowCount = 0;
         long totalCount = 0;
@@ -104,13 +112,17 @@ public class ResponseTimeCircuitBreaker extends AbstractCircuitBreaker {
             slowCount += counter.slowCount.sum();
             totalCount += counter.totalCount.sum();
         }
+        // 未达到最小请求量，不管return
         if (totalCount < minRequestAmount) {
             return;
         }
+        // 计算异常比例
         double currentRatio = slowCount * 1.0d / totalCount;
+        // 大于异常比例，断路器打开
         if (currentRatio > maxSlowRequestRatio) {
             transformToOpen(currentRatio);
         }
+        // 异常比例相等,异常比例设置为1，百分百异常，也要去打开断路器
         if (Double.compare(currentRatio, maxSlowRequestRatio) == 0 &&
                 Double.compare(maxSlowRequestRatio, SLOW_REQUEST_RATIO_MAX_VALUE) == 0) {
             transformToOpen(currentRatio);

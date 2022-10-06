@@ -42,6 +42,13 @@
             <artifactId>sentinel-api-gateway-adapter-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+            <version>1.9.7</version>
+        </dependency>
+
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -98,10 +105,11 @@
         </dependency>
 
         <!-- for Nacos rule publisher sample -->
+        <!-- 尝试使用nacos和sentinel整合 -->
         <dependency>
             <groupId>com.alibaba.csp</groupId>
             <artifactId>sentinel-datasource-nacos</artifactId>
-            <scope>test</scope>
+<!--            <scope>test</scope>-->
         </dependency>
         <!-- for Apollo rule publisher sample -->
         <dependency>

@@ -67,11 +67,15 @@ public abstract class AbstractCircuitBreaker implements CircuitBreaker {
     @Override
     public boolean tryPass(Context context) {
         // Template implementation.
+        // 若状态是关闭的，请求通过
         if (currentState.get() == State.CLOSED) {
             return true;
         }
+        //若状态是打开的，执行相关业务查看是否可以变为半开状态，放一条请求过去，根据执行结果决定断路器的状态变更
         if (currentState.get() == State.OPEN) {
             // For half-open state we allow a request for probing.
+            // 对于半开放状态，我们允许探测请求
+            // 若当前时间大于下次重试的时间戳
             return retryTimeoutArrived() && fromOpenToHalfOpen(context);
         }
         return false;
@@ -102,6 +106,7 @@ public abstract class AbstractCircuitBreaker implements CircuitBreaker {
     }
 
     protected boolean fromOpenToHalfOpen(Context context) {
+        // CAS将OPEN状态变为半开状态，执行成功的线程可以探测
         if (currentState.compareAndSet(State.OPEN, State.HALF_OPEN)) {
             notifyObservers(State.OPEN, State.HALF_OPEN, null);
             Entry entry = context.getCurEntry();
@@ -111,7 +116,12 @@ public abstract class AbstractCircuitBreaker implements CircuitBreaker {
                     // Note: This works as a temporary workaround for https://github.com/alibaba/Sentinel/issues/1638
                     // Without the hook, the circuit breaker won't recover from half-open state in some circumstances
                     // when the request is actually blocked by upcoming rules (not only degrade rules).
+                    /**
+                     * 注意:这是https://github.com/alibaba/Sentinel/issues/1638的一个临时解决方案
+                     * 没有钩子，断路器将不会从半开状态恢复，在某些情况下，当请求实际上被即将到来的规则(不仅仅是降级规则)阻止。
+                     */
                     if (entry.getBlockError() != null) {
+                        // 由于检测请求被阻塞，回退到OPEN
                         // Fallback to OPEN due to detecting request is blocked
                         currentState.compareAndSet(State.HALF_OPEN, State.OPEN);
                         notifyObservers(State.HALF_OPEN, State.OPEN, 1.0d);
@@ -141,6 +151,7 @@ public abstract class AbstractCircuitBreaker implements CircuitBreaker {
     protected boolean fromHalfOpenToClose() {
         if (currentState.compareAndSet(State.HALF_OPEN, State.CLOSED)) {
             resetStat();
+            // 通知观察者，状态变更
             notifyObservers(State.HALF_OPEN, State.CLOSED, null);
             return true;
         }

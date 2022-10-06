@@ -265,6 +265,7 @@ public class SphU {
 
     /**
      * Record statistics and perform rule checking for the given resource. The entry is prioritized.
+     * 记录统计信息并对给定的资源执行规则检查。该条目具有优先级。
      *
      * @param name        the unique name for the protected resource
      * @param trafficType the traffic type (inbound, outbound or internal). This is used

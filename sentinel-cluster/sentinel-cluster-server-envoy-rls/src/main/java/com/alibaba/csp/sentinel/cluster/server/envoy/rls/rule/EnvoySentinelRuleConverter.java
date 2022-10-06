@@ -52,6 +52,7 @@ public final class EnvoySentinelRuleConverter {
 
     public static FlowRule toSentinelFlowRule(String domain, EnvoyRlsRule.ResourceDescriptor descriptor) {
         // One descriptor could have only one rule.
+        // 一个描述符只能有一条规则
         String identifier = generateKey(domain, descriptor);
         long flowId = generateFlowId(identifier);
         return new FlowRule(identifier)

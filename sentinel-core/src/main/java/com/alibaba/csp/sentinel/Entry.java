@@ -183,6 +183,8 @@ public abstract class Entry implements AutoCloseable {
      * Like {@code CompletableFuture} since JDK 8, it guarantees specified handler
      * is invoked when this entry terminated (exited), no matter it's blocked or permitted.
      * Use it when you did some STATEFUL operations on entries.
+     * 它就像{@code CompletableFuture}一样，保证当这个条目终止(退出)时调用指定的处理程序，
+     * 无论它是阻止的还是允许的。当你对条目做一些有状态的操作时使用它
      * 
      * @param handler handler function on the invocation terminates
      * @since 1.8.0

@@ -118,35 +118,42 @@ public class CtSph implements Sph {
         throws BlockException {
         Context context = ContextUtil.getContext();
         if (context instanceof NullContext) {
+            // 表示上下文的数量已经超过了阈值，所以这里只初始化条目。不进行规则检查
             // The {@link NullContext} indicates that the amount of context has exceeded the threshold,
             // so here init the entry only. No rule checking will be done.
             return new CtEntry(resourceWrapper, null, context);
         }
 
         if (context == null) {
+            // 使用默认的context
             // Using default context.
             context = InternalContextUtil.internalEnter(Constants.CONTEXT_DEFAULT_NAME);
         }
-
+        // 全局开关关闭，没有规则需要检查。
         // Global switch is close, no rule checking will do.
         if (!Constants.ON) {
             return new CtEntry(resourceWrapper, null, context);
         }
 
+        // 获取该资源对应的SlotChain
         ProcessorSlot<Object> chain = lookProcessChain(resourceWrapper);
 
         /*
          * Means amount of resources (slot chain) exceeds {@link Constants.MAX_SLOT_CHAIN_SIZE},
          * so no rule checking will be done.
+         * 表示资源(插槽链)的数量超过{@link Constants。MAX SLOT CHAIN SIZE}，所以不会进行规则检查
          */
         if (chain == null) {
             return new CtEntry(resourceWrapper, null, context);
         }
 
+        // 某个资源的context创建出来就是公共使用的，创建entry用于每个线程执行调度执行，后续填充数据到context中的相关node里，context中应该是有很多原子操作，可以留意下
         Entry e = new CtEntry(resourceWrapper, chain, context);
         try {
+            // 执行Slot的entry方法
             chain.entry(context, resourceWrapper, null, count, prioritized, args);
         } catch (BlockException e1) {
+            // catch后,再次抛出BlockExecption,调用exit异常退出
             e.exit(count, args);
             throw e1;
         } catch (Throwable e1) {
@@ -190,18 +197,22 @@ public class CtSph implements Sph {
      *
      * @param resourceWrapper target resource
      * @return {@link ProcessorSlotChain} of the resource
+     * 获取资源的处理器链路。如果资源没有关联到，一个新处理器链路将被创建
      */
     ProcessorSlot<Object> lookProcessChain(ResourceWrapper resourceWrapper) {
+        // 懒加载，双重check创建
         ProcessorSlotChain chain = chainMap.get(resourceWrapper);
         if (chain == null) {
             synchronized (LOCK) {
                 chain = chainMap.get(resourceWrapper);
                 if (chain == null) {
                     // Entry size limit.
+                    // 限流槽超过6000，则不进行创建了
                     if (chainMap.size() >= Constants.MAX_SLOT_CHAIN_SIZE) {
                         return null;
                     }
 
+                    // 创建一个slot链路,（责任链中间件一般start流程进行组装，这里是通过spi机制去组装，业务里可以通过afterProperties方法去进行组装责任链）
                     chain = SlotChainProvider.newSlotChain();
                     Map<ResourceWrapper, ProcessorSlotChain> newMap = new HashMap<ResourceWrapper, ProcessorSlotChain>(
                         chainMap.size() + 1);

@@ -35,8 +35,17 @@ import com.alibaba.csp.sentinel.util.function.Predicate;
  */
 public class ArrayMetric implements Metric {
 
+    /**
+     * 滑动窗口列表
+     */
     private final LeapArray<MetricBucket> data;
 
+    /**
+     * 比如 6：3000
+     * 六个窗口，时间是3秒内，这样单个窗口在500ms
+     * @param sampleCount
+     * @param intervalInMs
+     */
     public ArrayMetric(int sampleCount, int intervalInMs) {
         this.data = new OccupiableBucketLeapArray(sampleCount, intervalInMs);
     }

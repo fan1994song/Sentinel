@@ -21,6 +21,8 @@ import java.util.List;
 import com.alibaba.csp.sentinel.dashboard.auth.AuthAction;
 import com.alibaba.csp.sentinel.dashboard.auth.AuthService;
 import com.alibaba.csp.sentinel.dashboard.auth.AuthService.PrivilegeType;
+import com.alibaba.csp.sentinel.dashboard.rule.nacos.FlowRuleNacosProvider;
+import com.alibaba.csp.sentinel.dashboard.rule.nacos.FlowRuleNacosPublisher;
 import com.alibaba.csp.sentinel.util.StringUtil;
 
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.FlowRuleEntity;
@@ -33,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,12 +61,18 @@ public class FlowControllerV2 {
     @Autowired
     private InMemoryRuleRepositoryAdapter<FlowRuleEntity> repository;
 
+//    @Autowired
+//    @Qualifier("flowRuleDefaultProvider")
+//    private DynamicRuleProvider<List<FlowRuleEntity>> ruleProvider;
+//    @Autowired
+//    @Qualifier("flowRuleDefaultPublisher")
+//    private DynamicRulePublisher<List<FlowRuleEntity>> rulePublisher;
+    @Lazy
     @Autowired
-    @Qualifier("flowRuleDefaultProvider")
-    private DynamicRuleProvider<List<FlowRuleEntity>> ruleProvider;
+    private FlowRuleNacosProvider ruleProvider;
+    @Lazy
     @Autowired
-    @Qualifier("flowRuleDefaultPublisher")
-    private DynamicRulePublisher<List<FlowRuleEntity>> rulePublisher;
+    private FlowRuleNacosPublisher rulePublisher;
 
     @GetMapping("/rules")
     @AuthAction(PrivilegeType.READ_RULE)

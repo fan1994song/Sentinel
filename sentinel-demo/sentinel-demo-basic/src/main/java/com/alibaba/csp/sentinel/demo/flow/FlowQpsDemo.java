@@ -42,15 +42,19 @@ public class FlowQpsDemo {
 
     private static volatile boolean stop = false;
 
-    private static final int threadCount = 32;
+//    private static final int threadCount = 32;
+    private static final int threadCount = 128;
 
     private static int seconds = 60 + 40;
 
     public static void main(String[] args) throws Exception {
+        // QPS限流20，全应用
         initFlowQpsRule();
 
+        // 统计的工具，便于自测查看效果
         tick();
         // first make the system run on a very low condition
+        // 创建32个线程，执行相关限流业务的操作
         simulateTraffic();
 
         System.out.println("===== begin to do flow control");
@@ -63,7 +67,7 @@ public class FlowQpsDemo {
         FlowRule rule1 = new FlowRule();
         rule1.setResource(KEY);
         // set limit qps to 20
-        rule1.setCount(20);
+        rule1.setCount(50);
         rule1.setGrade(RuleConstant.FLOW_GRADE_QPS);
         rule1.setLimitApp("default");
         rules.add(rule1);
@@ -99,18 +103,22 @@ public class FlowQpsDemo {
                     TimeUnit.SECONDS.sleep(1);
                 } catch (InterruptedException e) {
                 }
+                // 一秒的总计量
                 long globalTotal = total.get();
                 long oneSecondTotal = globalTotal - oldTotal;
                 oldTotal = globalTotal;
 
+                // 通过数值
                 long globalPass = pass.get();
                 long oneSecondPass = globalPass - oldPass;
                 oldPass = globalPass;
 
+                // 阻塞丢弃数值
                 long globalBlock = block.get();
                 long oneSecondBlock = globalBlock - oldBlock;
                 oldBlock = globalBlock;
 
+                // 输出
                 System.out.println(seconds + " send qps is: " + oneSecondTotal);
                 System.out.println(TimeUtil.currentTimeMillis() + ", total:" + oneSecondTotal
                     + ", pass:" + oneSecondPass

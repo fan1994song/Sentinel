@@ -46,6 +46,7 @@ public class SystemStatusListener implements Runnable {
         return currentCpuUsage;
     }
 
+    // 线程池一秒调度执行一次，记录系统当前相关的指标信息
     @Override
     public void run() {
         try {
@@ -53,6 +54,9 @@ public class SystemStatusListener implements Runnable {
             currentLoad = osBean.getSystemLoadAverage();
 
             /*
+                返回整个系统的“最近cpu使用情况”。该值是[0.0,1.0]区间中的double值。* 0.0表示所有cpu在最近观察到的一段时间内处于空闲状态，
+                而1.0表示在最近观察到的一段时间内，所有cpu在100%的时间内处于积极运行状态。0.0到1.0之间的所有值都是可能的，这取决于
+                系统中正在进行的活动。如果系统最近的cpu使用率不是
              * Java Doc copied from {@link OperatingSystemMXBean#getSystemCpuLoad()}:</br>
              * Returns the "recent cpu usage" for the whole system. This value is a double in the [0.0,1.0] interval.
              * A value of 0.0 means that all CPUs were idle during the recent period of time observed, while a value

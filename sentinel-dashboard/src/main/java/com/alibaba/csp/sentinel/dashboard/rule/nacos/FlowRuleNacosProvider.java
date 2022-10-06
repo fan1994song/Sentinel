@@ -13,48 +13,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alibaba.csp.sentinel.dashboard.rule;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+package com.alibaba.csp.sentinel.dashboard.rule.nacos;
 
 import com.alibaba.csp.sentinel.dashboard.client.SentinelApiClient;
-import com.alibaba.csp.sentinel.dashboard.discovery.AppManagement;
-import com.alibaba.csp.sentinel.dashboard.discovery.MachineInfo;
-import com.alibaba.csp.sentinel.util.StringUtil;
-
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.FlowRuleEntity;
-
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRuleProvider;
+import com.alibaba.csp.sentinel.datasource.Converter;
+import com.alibaba.csp.sentinel.util.StringUtil;
+import com.alibaba.nacos.api.config.ConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * @author Eric Zhao
- * 注掉使用nacos的
+ * @since 1.4.0
  */
-//@Component("flowRuleDefaultProvider")
-public class FlowRuleApiProvider implements DynamicRuleProvider<List<FlowRuleEntity>> {
+//@Component("flowRuleNacosProvider")
+public class FlowRuleNacosProvider implements DynamicRuleProvider<List<FlowRuleEntity>> {
+
+    @Autowired
+    private ConfigService configService;
 
     @Autowired
     private SentinelApiClient sentinelApiClient;
+
     @Autowired
-    private AppManagement appManagement;
+    private Converter<String, List<FlowRuleEntity>> converter;
 
     @Override
     public List<FlowRuleEntity> getRules(String appName) throws Exception {
-        if (StringUtil.isBlank(appName)) {
+        String rules = configService.getConfig(appName + NacosConfigUtil.FLOW_DATA_ID_POSTFIX,
+            NacosConfigUtil.GROUP_ID, 3000);
+        if (StringUtil.isEmpty(rules)) {
             return new ArrayList<>();
         }
-        List<MachineInfo> list = appManagement.getDetailApp(appName).getMachines()
-            .stream()
-            .filter(MachineInfo::isHealthy)
-            .sorted((e1, e2) -> Long.compare(e2.getLastHeartbeat(), e1.getLastHeartbeat())).collect(Collectors.toList());
-        if (list.isEmpty()) {
-            return new ArrayList<>();
-        } else {
-            MachineInfo machine = list.get(0);
-            return sentinelApiClient.fetchFlowRuleOfMachine(machine.getApp(), machine.getIp(), machine.getPort());
-        }
+        return converter.convert(rules);
     }
 }

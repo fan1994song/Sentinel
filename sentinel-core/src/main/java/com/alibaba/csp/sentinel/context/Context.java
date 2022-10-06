@@ -73,6 +73,7 @@ public class Context {
 
     /**
      * The origin of this context (usually indicate different invokers, e.g. service consumer name or origin IP).
+     * 此上下文的起源(通常指示不同的调用者，例如服务使用者名称或起源IP)
      */
     private String origin = "";
 

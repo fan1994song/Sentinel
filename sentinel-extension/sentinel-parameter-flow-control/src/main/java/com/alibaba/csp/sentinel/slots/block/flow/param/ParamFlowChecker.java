@@ -51,33 +51,40 @@ public final class ParamFlowChecker {
             return true;
         }
 
+        // 总参数值size都小于设置的下表，则不进行本次的热点参数校验
         int paramIdx = rule.getParamIdx();
         if (args.length <= paramIdx) {
             return true;
         }
 
+        // 获取需要校验的热点参数值
         // Get parameter value.
         Object value = args[paramIdx];
 
+        // 用paramFlowKey方法的结果赋值,对象作为参数流量限制的键,不强求实现ParamFlowArgument
         // Assign value with the result of paramFlowKey method
         if (value instanceof ParamFlowArgument) {
             value = ((ParamFlowArgument) value).paramFlowKey();
         }
+        // 参数为空，热点限流也不生效
         // If value is null, then pass
         if (value == null) {
             return true;
         }
 
+        // 若是集群限流且是QPS模式，发送请求到server端统一处理限流
         if (rule.isClusterMode() && rule.getGrade() == RuleConstant.FLOW_GRADE_QPS) {
             return passClusterCheck(resourceWrapper, rule, count, value);
         }
 
+        // 本机限流
         return passLocalCheck(resourceWrapper, rule, count, value);
     }
 
     private static boolean passLocalCheck(ResourceWrapper resourceWrapper, ParamFlowRule rule, int count,
                                           Object value) {
         try {
+            // 若是集合，遍历集合内的数据
             if (Collection.class.isAssignableFrom(value.getClass())) {
                 for (Object param : ((Collection)value)) {
                     if (!passSingleValueCheck(resourceWrapper, rule, count, param)) {
@@ -85,6 +92,7 @@ public final class ParamFlowChecker {
                     }
                 }
             } else if (value.getClass().isArray()) {
+                // 若是数组遍历数组
                 int length = Array.getLength(value);
                 for (int i = 0; i < length; i++) {
                     Object param = Array.get(value, i);
@@ -93,6 +101,7 @@ public final class ParamFlowChecker {
                     }
                 }
             } else {
+                // 通过string方式比较
                 return passSingleValueCheck(resourceWrapper, rule, count, value);
             }
         } catch (Throwable e) {
@@ -104,13 +113,16 @@ public final class ParamFlowChecker {
 
     static boolean passSingleValueCheck(ResourceWrapper resourceWrapper, ParamFlowRule rule, int acquireCount,
                                         Object value) {
+        // 当设置QPS阈值
         if (rule.getGrade() == RuleConstant.FLOW_GRADE_QPS) {
             if (rule.getControlBehavior() == RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER) {
+                // 匀速排队，漏桶算法
                 return passThrottleLocalCheck(resourceWrapper, rule, acquireCount, value);
             } else {
                 return passDefaultLocalCheck(resourceWrapper, rule, acquireCount, value);
             }
         } else if (rule.getGrade() == RuleConstant.FLOW_GRADE_THREAD) {
+            // 直接比较线程池统计的数值大于
             Set<Object> exclusionItems = rule.getParsedHotItems().keySet();
             long threadCount = getParameterMetric(resourceWrapper).getThreadCount(rule.getParamIdx(), value);
             if (exclusionItems.contains(value)) {
@@ -130,6 +142,7 @@ public final class ParamFlowChecker {
         CacheMap<Object, AtomicLong> tokenCounters = metric == null ? null : metric.getRuleTokenCounter(rule);
         CacheMap<Object, AtomicLong> timeCounters = metric == null ? null : metric.getRuleTimeCounter(rule);
 
+        // 没有该参数的统计，认为是true
         if (tokenCounters == null || timeCounters == null) {
             return true;
         }
@@ -155,17 +168,21 @@ public final class ParamFlowChecker {
 
             AtomicLong lastAddTokenTime = timeCounters.putIfAbsent(value, new AtomicLong(currentTime));
             if (lastAddTokenTime == null) {
+                // 令牌从未添加，只需补充令牌并立即使用
                 // Token never added, just replenish the tokens and consume {@code acquireCount} immediately.
                 tokenCounters.putIfAbsent(value, new AtomicLong(maxCount - acquireCount));
                 return true;
             }
 
+            // 计算自最后一个令牌添加以来的持续时间
             // Calculate the time duration since last token was added.
             long passTime = currentTime - lastAddTokenTime.get();
+            // 一个简化的令牌桶算法，只在统计窗口通过时才补充令牌
             // A simplified token bucket algorithm that will replenish the tokens only when statistic window has passed.
             if (passTime > rule.getDurationInSec() * 1000) {
                 AtomicLong oldQps = tokenCounters.putIfAbsent(value, new AtomicLong(maxCount - acquireCount));
                 if (oldQps == null) {
+                    // 这里可能不准确。
                     // Might not be accurate here.
                     lastAddTokenTime.set(currentTime);
                     return true;
@@ -201,6 +218,7 @@ public final class ParamFlowChecker {
         }
     }
 
+    // 通过节流局部检查
     static boolean passThrottleLocalCheck(ResourceWrapper resourceWrapper, ParamFlowRule rule, int acquireCount,
                                           Object value) {
         ParameterMetric metric = getParameterMetric(resourceWrapper);
@@ -209,6 +227,7 @@ public final class ParamFlowChecker {
             return true;
         }
 
+        // 计算最大令牌计数
         // Calculate max token count (threshold)
         Set<Object> exclusionItems = rule.getParsedHotItems().keySet();
         long tokenCount = (long)rule.getCount();

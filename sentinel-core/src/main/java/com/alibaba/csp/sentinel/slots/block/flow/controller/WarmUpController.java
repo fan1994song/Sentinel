@@ -25,6 +25,8 @@ import com.alibaba.csp.sentinel.slots.block.flow.TrafficShapingController;
  * <p>
  * The principle idea comes from Guava. However, the calculation of Guava is
  * rate-based, which means that we need to translate rate to QPS.
+ * 主要的想法来自于Guava。但是，Guava的计算是基于速率的，这意味着我们需要将速率转换为QPS
+ * 此冷数据限流策略，如果流量波动较大时，qps限流会经常进入冷访问阶段
  * </p>
  *
  * <p>
@@ -58,18 +60,39 @@ import com.alibaba.csp.sentinel.slots.block.flow.TrafficShapingController;
  * our cold (minimum) rate to our stable (maximum) rate, x (or q) is the
  * occupied token.
  * </p>
- *
+ * warm-up使用到的令牌桶的限流算法
  * @author jialiang.linjl
  */
 public class WarmUpController implements TrafficShapingController {
 
+    /**
+     * FlowRule中设定的阈值
+     */
     protected double count;
+    /**
+     * 冷却因子，默认为3，表示倍数，即系统最"冷"时(令牌桶饱和时)，令牌生成时间间隔是正常情况下的多少倍
+     */
     private int coldFactor;
+    /**
+     * 预警值，表示进入预热或预热完毕
+     */
     protected int warningToken = 0;
+    /**
+     * 最大可用token值，计算公式：warningToken+(2*时间*阈值)/(1+因子)，默认情况下为warningToken的2倍
+     */
     private int maxToken;
+    /**
+     * 斜度，(coldFactor-1)/count/(maxToken-warningToken)，用于计算token生成的时间间隔，进而计算当前token生成速度，最终比较token生成速度与消费速度，决定是否限流
+     */
     protected double slope;
 
+    /**
+     * 姑且可以理解为令牌桶中令牌的数量
+     */
     protected AtomicLong storedTokens = new AtomicLong(0);
+    /**
+     * 上次填充的时间
+     */
     protected AtomicLong lastFilledTime = new AtomicLong(0);
 
     public WarmUpController(double count, int warmUpPeriodInSec, int coldFactor) {
@@ -80,6 +103,13 @@ public class WarmUpController implements TrafficShapingController {
         construct(count, warmUpPeriodInSec, 3);
     }
 
+    /**
+     * warmUpPeriodInSec：系统预热时间
+     * 例：count：5，warmUpPeriodInSec：10，coldFactor：3
+     * warningToken=25
+     * maxToken = 25+（2*10*5/(1+3)）=50
+     * slope=2/5/25 = 0.016
+     */
     private void construct(double count, int warmUpPeriodInSec, int coldFactor) {
 
         if (coldFactor <= 1) {
@@ -88,8 +118,11 @@ public class WarmUpController implements TrafficShapingController {
 
         this.count = count;
 
+        // 默认3
         this.coldFactor = coldFactor;
 
+        // stableInterval：令牌生成的时间间隔：200ms
+        // warningToken:
         // thresholdPermits = 0.5 * warmupPeriod / stableInterval.
         // warningToken = 100;
         warningToken = (int)(warmUpPeriodInSec * count) / (coldFactor - 1);
@@ -112,14 +145,18 @@ public class WarmUpController implements TrafficShapingController {
 
     @Override
     public boolean canPass(Node node, int acquireCount, boolean prioritized) {
+        // 获取当前1s的QPS
         long passQps = (long) node.passQps();
 
+        // 获取上一窗口通过的qps
         long previousQps = (long) node.previousPassQps();
+        // 生成和滑落token
         syncToken(previousQps);
 
         // 开始计算它的斜率
         // 如果进入了警戒线，开始调整他的qps
         long restToken = storedTokens.get();
+        // 如果令牌桶中的token数量大于警戒值，说明还未预热结束，需要判断token的生成速度和消费速度
         if (restToken >= warningToken) {
             long aboveToken = restToken - warningToken;
             // 消耗的速度要比warning快，但是要比慢
@@ -129,6 +166,7 @@ public class WarmUpController implements TrafficShapingController {
                 return true;
             }
         } else {
+            // 预热结束，直接判断是否超过设置的阈值
             if (passQps + acquireCount <= count) {
                 return true;
             }
@@ -138,26 +176,44 @@ public class WarmUpController implements TrafficShapingController {
     }
 
     protected void syncToken(long passQps) {
+        // 毫秒级时间戳-秒级整数
         long currentTime = TimeUtil.currentTimeMillis();
         currentTime = currentTime - currentTime % 1000;
+
+        // 判断成立，如果小于，说明可能出现了时钟回拨
+        // 如果等于，说明当前请求都处于同一秒内，则不进行token添加和滑落操作，避免的重复扣减
+        // 时间窗口的跨度为1s
         long oldLastFillTime = lastFilledTime.get();
         if (currentTime <= oldLastFillTime) {
             return;
         }
 
+        // token数量
         long oldValue = storedTokens.get();
+        // 最新的令牌数
         long newValue = coolDownTokens(currentTime, passQps);
-
+//        System.err.println("oldValue:" + oldValue + "newValue:" + newValue + "passQps:" + passQps);
+        // 重置token数量
         if (storedTokens.compareAndSet(oldValue, newValue)) {
+            // token滑落，即token消费
+            // 减去上一个时间窗口的通过请求数
             long currentValue = storedTokens.addAndGet(0 - passQps);
             if (currentValue < 0) {
                 storedTokens.set(0L);
             }
+            // 设置最后添加令牌时间
             lastFilledTime.set(currentTime);
         }
 
     }
 
+    /**
+     * warmUpPeriodInSec：系统预热时间
+     * 例：count：5，warmUpPeriodInSec：10，coldFactor：3
+     * warningToken=25
+     * maxToken = 25+（2*10*5/(1+3)）=50
+     * slope=2/5/25 = 0.016
+     */
     private long coolDownTokens(long currentTime, long passQps) {
         long oldValue = storedTokens.get();
         long newValue = oldValue;
@@ -165,11 +221,21 @@ public class WarmUpController implements TrafficShapingController {
         // 添加令牌的判断前提条件:
         // 当令牌的消耗程度远远低于警戒线的时候
         if (oldValue < warningToken) {
+            // 计算过去一段时间内，可以通过的QPS总量
+            // 初始加载时，令牌数量达到maxToken
             newValue = (long)(oldValue + (currentTime - lastFilledTime.get()) * count / 1000);
+//            System.err.println("oldValue < warningToken oldValue" + oldValue + "newValue" + newValue + "passQps" + passQps);
         } else if (oldValue > warningToken) {
+            // 大于警戒线时，passQps< 5/3=1
+            /**
+             * 当流量正常在count / coldFactor以内以冷数据提供服务，当流量激增，这里就不会增加newValue，因为passQps一定不会小于1/3限流值
+             * 当令牌越来越小时，aboveToken就会变小，warningQps就会变大，所以qps就可以缓慢的上升,passQps会越来越大，进而消费令牌
+             * 直到令牌数到达告警阈值，此时就认为预热完毕，正常按照令牌桶限流策略提供服务
+             */
             if (passQps < (int)count / coldFactor) {
                 newValue = (long)(oldValue + (currentTime - lastFilledTime.get()) * count / 1000);
             }
+//            System.err.println("oldValue > warningToken oldValue" + oldValue + "newValue" + newValue + "passQps" + passQps + "count / coldFactor" + count / coldFactor);
         }
         return Math.min(newValue, maxToken);
     }

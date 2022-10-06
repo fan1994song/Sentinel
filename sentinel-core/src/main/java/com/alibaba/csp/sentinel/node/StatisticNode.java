@@ -92,6 +92,7 @@ public class StatisticNode implements Node {
     /**
      * Holds statistics of the recent {@code INTERVAL} milliseconds. The {@code INTERVAL} is divided into time spans
      * by given {@code sampleCount}.
+     * 保存最近的{@code INTERVAL}毫秒的统计信息。{@code INTERVAL}被给定的{@code sampleCount}划分为时间跨度。
      */
     private transient volatile Metric rollingCounterInSecond = new ArrayMetric(SampleCountProperty.SAMPLE_COUNT,
         IntervalProperty.INTERVAL);
@@ -99,16 +100,19 @@ public class StatisticNode implements Node {
     /**
      * Holds statistics of the recent 60 seconds. The windowLengthInMs is deliberately set to 1000 milliseconds,
      * meaning each bucket per second, in this way we can get accurate statistics of each second.
+     * 保存最近60秒的统计信息。windowLengthInMs被故意设置为1000毫秒，表示每个桶每秒，这样我们可以得到每秒的准确统计数据。
      */
     private transient Metric rollingCounterInMinute = new ArrayMetric(60, 60 * 1000, false);
 
     /**
      * The counter for thread count.
+     * 当前线程数
      */
     private LongAdder curThreadNum = new LongAdder();
 
     /**
      * The last timestamp when metrics were fetched.
+     * 获取度量时的最后一个时间戳获取度量时的最后一个时间戳
      */
     private long lastFetchTime = -1;
 
@@ -196,8 +200,10 @@ public class StatisticNode implements Node {
         return rollingCounterInMinute.exception();
     }
 
+    // 根据滑动窗口模式统计的数据，计算当前qps
     @Override
     public double passQps() {
+        // 当前窗口的通过数值/单个窗口所占用的秒数：5/0.5=10 QPS
         return rollingCounterInSecond.pass() / rollingCounterInSecond.getWindowIntervalInSec();
     }
 
@@ -224,6 +230,7 @@ public class StatisticNode implements Node {
 
     @Override
     public double avgRt() {
+        // 获取当前滑动窗口的成功条数，得到总RT除以数值，计算得到平均的RT时间
         long successCount = rollingCounterInSecond.success();
         if (successCount == 0) {
             return 0;
@@ -288,6 +295,7 @@ public class StatisticNode implements Node {
     public long tryOccupyNext(long currentTime, int acquireCount, double threshold) {
         double maxCount = threshold * IntervalProperty.INTERVAL / 1000;
         long currentBorrow = rollingCounterInSecond.waiting();
+        // 当前等待的已经超过最大阈值了，返回超时时间，让上游快速失败
         if (currentBorrow >= maxCount) {
             return OccupyTimeoutProperty.getOccupyTimeout();
         }
@@ -297,6 +305,8 @@ public class StatisticNode implements Node {
 
         int idx = 0;
         /*
+            注意:这里{@code currentPass}可能比现在的实际值要小，因为调用rollingCounterInSecond.pass()后的时差。
+            因此，在高并发性中，下面的代码可能会导致更多的令牌被借用。
          * Note: here {@code currentPass} may be less than it really is NOW, because time difference
          * since call rollingCounterInSecond.pass(). So in high concurrency, the following code may
          * lead more tokens be borrowed.

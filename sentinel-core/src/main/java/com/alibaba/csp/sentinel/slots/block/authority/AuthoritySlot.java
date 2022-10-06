@@ -38,6 +38,7 @@ public class AuthoritySlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     @Override
     public void entry(Context context, ResourceWrapper resourceWrapper, DefaultNode node, int count, boolean prioritized, Object... args)
         throws Throwable {
+        // 校验黑白名单权限
         checkBlackWhiteAuthority(resourceWrapper, context);
         fireEntry(context, resourceWrapper, node, count, prioritized, args);
     }
@@ -48,12 +49,14 @@ public class AuthoritySlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     }
 
     void checkBlackWhiteAuthority(ResourceWrapper resource, Context context) throws AuthorityException {
+        // 获取权限配置的所有规则(权限基本不会变，所以没必要做并发控制)
         Map<String, Set<AuthorityRule>> authorityRules = AuthorityRuleManager.getAuthorityRules();
 
         if (authorityRules == null) {
             return;
         }
 
+        // 获取资源的黑白名单规则配置，不存在直接结束方法
         Set<AuthorityRule> rules = authorityRules.get(resource.getName());
         if (rules == null) {
             return;

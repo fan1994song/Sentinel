@@ -276,6 +276,7 @@ public class FlowControllerV1 {
 
     private CompletableFuture<Void> publishRules(String app, String ip, Integer port) {
         List<FlowRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
+        // 异步设置机器的限流规则
         return sentinelApiClient.setFlowRuleOfMachineAsync(app, ip, port, rules);
     }
 }

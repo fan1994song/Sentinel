@@ -67,6 +67,7 @@ public class ExceptionCircuitBreaker extends AbstractCircuitBreaker {
         if (entry == null) {
             return;
         }
+        // 若error存在，则统计error、请求数值
         Throwable error = entry.getError();
         SimpleErrorCounter counter = stat.currentWindow().value();
         if (error != null) {
@@ -74,6 +75,7 @@ public class ExceptionCircuitBreaker extends AbstractCircuitBreaker {
         }
         counter.getTotalCount().add(1);
 
+        // 当超过阈值时处理状态变化
         handleStateChangeWhenThresholdExceeded(error);
     }
 
@@ -81,7 +83,8 @@ public class ExceptionCircuitBreaker extends AbstractCircuitBreaker {
         if (currentState.get() == State.OPEN) {
             return;
         }
-        
+
+        // 半开状态，若error为空则断路器关闭，否则继续打开
         if (currentState.get() == State.HALF_OPEN) {
             // In detecting request
             if (error == null) {
@@ -99,14 +102,17 @@ public class ExceptionCircuitBreaker extends AbstractCircuitBreaker {
             errCount += counter.errorCount.sum();
             totalCount += counter.totalCount.sum();
         }
+        // 请求总数小于阈值，不管return
         if (totalCount < minRequestAmount) {
             return;
         }
+        // 异常数值/若是比例配置，计算异常比例
         double curCount = errCount;
         if (strategy == DEGRADE_GRADE_EXCEPTION_RATIO) {
             // Use errorRatio
             curCount = errCount * 1.0d / totalCount;
         }
+        // threshold：异常数/比例阈值，大于则需要开启断路器
         if (curCount > threshold) {
             transformToOpen(curCount);
         }

@@ -36,6 +36,7 @@ import com.alibaba.nacos.api.config.listener.Listener;
 /**
  * A read-only {@code DataSource} with Nacos backend. When the data in Nacos backend has been modified,
  * Nacos will automatically push the new value so that the dynamic configuration can be real-time.
+ * 带有Nacos后端的只读{@code DataSource}。当Nacos后端的数据被修改时，Nacos将自动推送新值，以便动态配置可以实时进行
  *
  * @author Eric Zhao
  */

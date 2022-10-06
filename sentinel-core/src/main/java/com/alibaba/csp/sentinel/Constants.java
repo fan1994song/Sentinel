@@ -72,6 +72,7 @@ public final class Constants {
 
     /**
      * Order of default processor slots
+     * 责任链路的每个执行器的级别，排序后组成责任链
      */
     public static final int ORDER_NODE_SELECTOR_SLOT = -10000;
     public static final int ORDER_CLUSTER_BUILDER_SLOT = -9000;

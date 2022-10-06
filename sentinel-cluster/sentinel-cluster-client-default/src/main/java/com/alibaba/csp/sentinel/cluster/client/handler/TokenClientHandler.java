@@ -61,6 +61,7 @@ public class TokenClientHandler extends ChannelInboundHandlerAdapter {
                 return;
             }
 
+            // 读取到的xid会放入到promiseHolder中完成不同进程间、多线程之间的数据传递
             TokenClientPromiseHolder.completePromise(response.getId(), response);
         }
     }

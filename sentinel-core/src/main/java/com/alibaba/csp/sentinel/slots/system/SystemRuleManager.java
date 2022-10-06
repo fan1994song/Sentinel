@@ -283,6 +283,7 @@ public final class SystemRuleManager {
 
     /**
      * Apply {@link SystemRule} to the resource. Only inbound traffic will be checked.
+     * 对资源应用{@link SystemRule}。只检查入站流量
      *
      * @param resourceWrapper the resource.
      * @throws BlockException when any system rule's threshold is exceeded.
@@ -291,16 +292,19 @@ public final class SystemRuleManager {
         if (resourceWrapper == null) {
             return;
         }
+        // 确保检查开关打开
         // Ensure the checking switch is on.
         if (!checkSystemStatus.get()) {
             return;
         }
 
+        // 非入站流量不校验
         // for inbound traffic only
         if (resourceWrapper.getEntryType() != EntryType.IN) {
             return;
         }
 
+        // 得到当前qps，再加上本次调度资源的数值大于qps阈值，就抛出block异常
         // total qps
         double currentQps = Constants.ENTRY_NODE.passQps();
         if (currentQps + count > qps) {
@@ -308,17 +312,20 @@ public final class SystemRuleManager {
         }
 
         // total thread
+        // 获取当前线程数，和maxThread进行比较，决定是否抛出异常，maxThread默认是MAX_VALUE，可根据配置变动
         int currentThread = Constants.ENTRY_NODE.curThreadNum();
         if (currentThread > maxThread) {
             throw new SystemBlockException(resourceWrapper.getName(), "thread");
         }
 
+        // 平均响应时间判定
         double rt = Constants.ENTRY_NODE.avgRt();
         if (rt > maxRt) {
             throw new SystemBlockException(resourceWrapper.getName(), "rt");
         }
 
         // load. BBR algorithm.
+        // 当开启系统负载检测，判断是否到达阈值，从而决定是否拒绝请求
         if (highestSystemLoadIsSet && getCurrentSystemAvgLoad() > highestSystemLoad) {
             if (!checkBbr(currentThread)) {
                 throw new SystemBlockException(resourceWrapper.getName(), "load");
@@ -326,6 +333,7 @@ public final class SystemRuleManager {
         }
 
         // cpu usage
+        // 当开启系统CPU检测时，判断是否到达阈值，从而决定是否拒绝请求
         if (highestCpuUsageIsSet && getCurrentCpuUsage() > highestCpuUsage) {
             throw new SystemBlockException(resourceWrapper.getName(), "cpu");
         }

@@ -27,6 +27,9 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public class MetricBucket {
 
+    /**
+     * longAdder数组，成功、进行中、限流等在不同index进行统计的效果
+     */
     private final LongAdder[] counters;
 
     private volatile long minRt;

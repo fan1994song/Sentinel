@@ -54,9 +54,18 @@ public abstract class LeapArray<T> {
 
     /**
      * The total bucket count is: {@code sampleCount = intervalInMs / windowLengthInMs}.
+     * 滑动窗口，窗口总桶计数是:sampleCount {@code sampleCount = intervalInMs / windowLengthInMs}
+     * 滑动窗口，时间间隔是:intervalInMs
+     * 滑动窗口，时间间隔的秒数:intervalInMs /1000.0
+     * 比如 6：3000
+     * sampleCount = 6
+     * intervalInMs = 3000
+     * windowLengthInMs = 3000/6 = 500ms
+     * intervalInSecond = 总窗口数值3秒
      *
-     * @param sampleCount  bucket count of the sliding window
-     * @param intervalInMs the total time interval of this {@link LeapArray} in milliseconds
+     *
+     * @param sampleCount  bucket count of the sliding window 滑动窗的桶数
+     * @param intervalInMs the total time interval of this {@link LeapArray} in milliseconds 这个{LeapArray}的总时间间隔，以毫秒为单位
      */
     public LeapArray(int sampleCount, int intervalInMs) {
         AssertUtil.isTrue(sampleCount > 0, "bucket count is invalid: " + sampleCount);
@@ -72,6 +81,7 @@ public abstract class LeapArray<T> {
     }
 
     /**
+     * 获取当前时间戳的桶
      * Get the bucket at current timestamp.
      *
      * @return the bucket at current timestamp
@@ -99,6 +109,7 @@ public abstract class LeapArray<T> {
 
     private int calculateTimeIdx(/*@Valid*/ long timeMillis) {
         long timeId = timeMillis / windowLengthInMs;
+        // 计算当前索引，以便将时间戳映射到leap数组
         // Calculate current index so we can map the timestamp to the leap array.
         return (int)(timeId % array.length());
     }
@@ -109,6 +120,7 @@ public abstract class LeapArray<T> {
 
     /**
      * Get bucket item at provided timestamp.
+     * 根据所提供的时间戳获取桶项
      *
      * @param timeMillis a valid timestamp in milliseconds
      * @return current bucket item at provided timestamp if the time is valid; null if time is invalid
@@ -120,6 +132,7 @@ public abstract class LeapArray<T> {
 
         int idx = calculateTimeIdx(timeMillis);
         // Calculate current bucket start time.
+        // 计算当前时间的理论窗口开始时间
         long windowStart = calculateWindowStart(timeMillis);
 
         /*
@@ -128,6 +141,10 @@ public abstract class LeapArray<T> {
          * (1) Bucket is absent, then just create a new bucket and CAS update to circular array.
          * (2) Bucket is up-to-date, then just return the bucket.
          * (3) Bucket is deprecated, then reset current bucket.
+         * 从数组中获取给定时间的桶项。
+         * (1)桶不存在，那么只需创建一个新的桶并将CAS更新到循环数组。
+         *（2）桶是最新的，然后返回桶。
+         * (3) 桶已弃用，则重置当前桶。
          */
         while (true) {
             WindowWrap<T> old = array.get(idx);
@@ -175,6 +192,10 @@ public abstract class LeapArray<T> {
                  *                           time=1676
                  *          startTime of Bucket 2: 400, deprecated, should be reset
                  *
+                 * 如果旧桶的开始时间戳落后于提供的时间，这意味着桶已弃用。我们必须将桶重置为当前{@code windowStart}。
+                 * 注意，重置和清理操作很难是原子的，所以我们需要一个更新锁来保证桶更新的正确性。更新锁是有条件的(很小的范围)，
+                 * 只有当bucket被弃用时才会生效，所以在大多数情况下它不会导致性能损失。
+                 *
                  * If the start timestamp of old bucket is behind provided time, that means
                  * the bucket is deprecated. We have to reset the bucket to current {@code windowStart}.
                  * Note that the reset and clean-up operations are hard to be atomic,
@@ -191,10 +212,12 @@ public abstract class LeapArray<T> {
                         updateLock.unlock();
                     }
                 } else {
+                    // 争用失败，线程将放弃它的时间片来等待可用的桶
                     // Contention failed, the thread will yield its time slice to wait for bucket available.
                     Thread.yield();
                 }
             } else if (windowStart < old.windowStart()) {
+                // 不应该从这里过去，因为规定的时间已经晚了
                 // Should not go through here, as the provided time is already behind.
                 return new WindowWrap<T>(windowLengthInMs, windowStart, newEmptyBucket(timeMillis));
             }
@@ -202,6 +225,7 @@ public abstract class LeapArray<T> {
     }
 
     /**
+     * 获取所提供时间戳之前的前一个桶项,提供的时间减去一个时间窗口即可
      * Get the previous bucket item before provided timestamp.
      *
      * @param timeMillis a valid timestamp in milliseconds
@@ -334,6 +358,7 @@ public abstract class LeapArray<T> {
         List<T> result = new ArrayList<T>(size);
 
         for (int i = 0; i < size; i++) {
+            // 若当前时间减去窗口开始时间大于总时间窗口，过滤掉，其余的就是当前窗口的真实值
             WindowWrap<T> windowWrap = array.get(i);
             if (windowWrap == null || isWindowDeprecated(timeMillis, windowWrap)) {
                 continue;

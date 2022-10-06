@@ -110,6 +110,7 @@ import java.util.Map;
  *             +- - - - - - - - - - +- - - - - - -> ClusterNode(nodeA);
  * </pre>
  *
+ * 这个类将尝试通过构建调用跟踪：https://www.iocoder.cn/Sentinel/houyi/Analysis-of-resource-call-chain-for-the-sentinel/
  * <p>
  * As we can see, two {@link DefaultNode} are created for "nodeA" in two context, but only one
  * {@link ClusterNode} is created.
@@ -152,8 +153,14 @@ public class NodeSelectorSlot extends AbstractLinkedProcessorSlot<Object> {
          * so what is the fastest way to get total statistics of the same resource?
          * The answer is all {@link DefaultNode}s with same resource name share one
          * {@link ClusterNode}. See {@link ClusterBuilderSlot} for detail.
+         *
+         * 有趣的是，我们使用上下文名而不是资源名作为映射键。记住，相同的资源({@link ResourceWrapper#equals(Object)})
+         * 将全局共享相同的{@link ProcessorSlotChain}，无论在哪个上下文中。因此，如果code进入
+         * {@link #entry(Context, ResourceWrapper, DefaultNode, int, Object…)}，则资源名必须相同，但上下文名可
+         * 能不同。如果我们使用{@link com.alibaba.csp.sentinel。sphu# entry(String resource)}在不同的上下文中输入相同的资源
          */
         DefaultNode node = map.get(context.getName());
+        // 负责收集资源的路径，并将这些资源的调用路径，以树状结构存储起来，用于根据调用路径来限流降级，相同资源名不同entry使用同样的DefaultNode，便于资源统一处理、可见
         if (node == null) {
             synchronized (this) {
                 node = map.get(context.getName());

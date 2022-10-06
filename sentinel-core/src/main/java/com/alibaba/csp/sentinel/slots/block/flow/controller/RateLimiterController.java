@@ -16,6 +16,7 @@
 package com.alibaba.csp.sentinel.slots.block.flow.controller;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.LockSupport;
 
 import com.alibaba.csp.sentinel.slots.block.flow.TrafficShapingController;
 
@@ -24,6 +25,7 @@ import com.alibaba.csp.sentinel.node.Node;
 
 /**
  * @author jialiang.linjl
+ * 更像是漏桶算法：匀速器模式
  */
 public class RateLimiterController implements TrafficShapingController {
 
@@ -55,31 +57,40 @@ public class RateLimiterController implements TrafficShapingController {
         }
 
         long currentTime = TimeUtil.currentTimeMillis();
+        // 计算每两个请求之间的间隔
         // Calculate the interval between every two requests.
         long costTime = Math.round(1.0 * (acquireCount) / count * 1000);
 
+        // 此请求的预期通过时间
         // Expected pass time of this request.
         long expectedTime = costTime + latestPassedTime.get();
 
         if (expectedTime <= currentTime) {
+            // 这里可能会有争论，但没关系
             // Contention may exist here, but it's okay.
             latestPassedTime.set(currentTime);
             return true;
         } else {
             // Calculate the time to wait.
+            // 计算等待的时间
             long waitTime = costTime + latestPassedTime.get() - TimeUtil.currentTimeMillis();
+            // 若大于最大排队时间，直接返回失败
             if (waitTime > maxQueueingTimeMs) {
                 return false;
             } else {
                 long oldTime = latestPassedTime.addAndGet(costTime);
                 try {
+                    // 上面不是原子操作，所以这里可能会超过最大排队时间，所以要有check回退操作
                     waitTime = oldTime - TimeUtil.currentTimeMillis();
                     if (waitTime > maxQueueingTimeMs) {
                         latestPassedTime.addAndGet(-costTime);
                         return false;
                     }
                     // in race condition waitTime may <= 0
+                    // 排队等待一段时间，再返回true
                     if (waitTime > 0) {
+                        // 这样会不会更好
+//                        LockSupport.parkNanos(waitTime);
                         Thread.sleep(waitTime);
                     }
                     return true;

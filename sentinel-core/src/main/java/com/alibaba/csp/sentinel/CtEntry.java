@@ -50,10 +50,12 @@ class CtEntry extends Entry {
     }
 
     private void setUpEntryFor(Context context) {
+        // entry 不是 NullContext的具体实例
         // The entry should not be associated to NullContext.
         if (context instanceof NullContext) {
             return;
         }
+        //
         this.parent = context.getCurEntry();
         if (parent != null) {
             ((CtEntry) parent).child = this;
@@ -67,6 +69,7 @@ class CtEntry extends Entry {
     }
 
     /**
+     * 退出处理程序将被调用在槽链的onExit之后
      * Note: the exit handlers will be called AFTER onExit of slot chain.
      */
     private void callExitHandlersAndCleanUp(Context ctx) {
@@ -105,10 +108,12 @@ class CtEntry extends Entry {
                 throw new ErrorEntryFreeException(errorMessage);
             } else {
                 // Go through the onExit hook of all slots.
+                // 遍历所有插槽的onExit钩子
                 if (chain != null) {
                     chain.exit(context, resourceWrapper, count, args);
                 }
                 // Go through the existing terminate handlers (associated to this invocation).
+                // 遍历现有的终止处理程序
                 callExitHandlersAndCleanUp(context);
 
                 // Restore the call stack.
@@ -119,6 +124,7 @@ class CtEntry extends Entry {
                 if (parent == null) {
                     // Default context (auto entered) will be exited automatically.
                     if (ContextUtil.isDefaultContext(context)) {
+                        // 将线程中的context去除掉，context本身的数据还是留在静态数据中
                         ContextUtil.exit();
                     }
                 }

@@ -26,6 +26,7 @@ import com.alibaba.csp.sentinel.spi.Spi;
 /**
  * A {@link ProcessorSlot} that dedicates to {@link SystemRule} checking.
  *
+ * 根据总的请求统计信息，来做流控，主要是防止系统被搞垮
  * @author jialiang.linjl
  * @author leyou
  */
@@ -35,6 +36,7 @@ public class SystemSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     @Override
     public void entry(Context context, ResourceWrapper resourceWrapper, DefaultNode node, int count,
                       boolean prioritized, Object... args) throws Throwable {
+        // 根据设置的系统规则，检查校验当前状态
         SystemRuleManager.checkSystem(resourceWrapper, count);
         fireEntry(context, resourceWrapper, node, count, prioritized, args);
     }

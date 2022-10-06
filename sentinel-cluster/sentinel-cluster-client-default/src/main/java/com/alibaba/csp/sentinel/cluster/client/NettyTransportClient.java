@@ -216,6 +216,10 @@ public class NettyTransportClient implements ClusterTransportClient {
         try {
             request.setId(xid);
 
+            // netty中做同步，因为发送给server到server发送给client都是异步的，所以这里通过创建promise放入客户端，
+            // 然后阻塞等待，超过就失败，否则等server发送数据后在channelRead()中处理数据，将数据组装放入公共池中详情，
+            // 这样promise.await就可以被打断，不过sentinel集群限流还是有单点问题和网络通信的性能损耗，像是用redis限流
+            // 也是这样，所以感觉还是根据业务去做取舍，大多数还是集群限流下发作用到每个机器自己做限流
             channel.writeAndFlush(request);
 
             ChannelPromise promise = channel.newPromise();

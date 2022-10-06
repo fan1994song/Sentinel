@@ -31,6 +31,7 @@ import com.alibaba.csp.sentinel.spi.Spi;
 /**
  * A {@link ProcessorSlot} dedicates to circuit breaking.
  *
+ * 熔断器、断路器实现
  * @author Carpenter Lee
  * @author Eric Zhao
  */
@@ -40,12 +41,14 @@ public class DegradeSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     @Override
     public void entry(Context context, ResourceWrapper resourceWrapper, DefaultNode node, int count,
                       boolean prioritized, Object... args) throws Throwable {
+        // 熔断检测,执行检查
         performChecking(context, resourceWrapper);
 
         fireEntry(context, resourceWrapper, node, count, prioritized, args);
     }
 
     void performChecking(Context context, ResourceWrapper r) throws BlockException {
+        // 获取资源设置的断路器策略
         List<CircuitBreaker> circuitBreakers = DegradeRuleManager.getCircuitBreakers(r.getName());
         if (circuitBreakers == null || circuitBreakers.isEmpty()) {
             return;
@@ -57,13 +60,22 @@ public class DegradeSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
         }
     }
 
+    /**
+     * 离开时，根据统计的数据来决定当前断路器的状态
+     * @param context         current {@link Context}
+     * @param r
+     * @param count           tokens needed
+     * @param args            parameters of the original call
+     */
     @Override
     public void exit(Context context, ResourceWrapper r, int count, Object... args) {
         Entry curEntry = context.getCurEntry();
+        // 不为空，说明此时是熔断器打开被限制了
         if (curEntry.getBlockError() != null) {
             fireExit(context, r, count, args);
             return;
         }
+        // 不存在断路器，直接回退
         List<CircuitBreaker> circuitBreakers = DegradeRuleManager.getCircuitBreakers(r.getName());
         if (circuitBreakers == null || circuitBreakers.isEmpty()) {
             fireExit(context, r, count, args);
@@ -72,6 +84,7 @@ public class DegradeSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
 
         if (curEntry.getBlockError() == null) {
             // passed request
+            // 请求通过，收集信息，决定断路器状态
             for (CircuitBreaker circuitBreaker : circuitBreakers) {
                 circuitBreaker.onRequestComplete(context);
             }

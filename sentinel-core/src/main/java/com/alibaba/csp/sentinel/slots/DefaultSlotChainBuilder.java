@@ -39,6 +39,7 @@ public class DefaultSlotChainBuilder implements SlotChainBuilder {
     public ProcessorSlotChain build() {
         ProcessorSlotChain chain = new DefaultProcessorSlotChain();
 
+        // loadInstanceListSorted通过springboot的spi机制将责任链数据进行加载创建出ProcessorSlotChain
         List<ProcessorSlot> sortedSlotList = SpiLoader.of(ProcessorSlot.class).loadInstanceListSorted();
         for (ProcessorSlot slot : sortedSlotList) {
             if (!(slot instanceof AbstractLinkedProcessorSlot)) {

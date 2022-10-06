@@ -56,29 +56,35 @@ public class StatisticSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
                       boolean prioritized, Object... args) throws Throwable {
         try {
             // Do some checking.
+            // 直接出发下一个slot的entry去执行,此处相当于后置的切面去处理统计该资源下的当前数据信息
             fireEntry(context, resourceWrapper, node, count, prioritized, args);
 
+            // 如果能通过SlotChain中后面的Slot的entry方法，说明没有被限流或降级,此时再去加一,decrease在exit调用减一
             // Request passed, add thread count and pass count.
             node.increaseThreadNum();
             node.addPassRequest(count);
 
             if (context.getCurEntry().getOriginNode() != null) {
                 // Add count for origin node.
+                // 为原始节点添加计数
                 context.getCurEntry().getOriginNode().increaseThreadNum();
                 context.getCurEntry().getOriginNode().addPassRequest(count);
             }
 
             if (resourceWrapper.getEntryType() == EntryType.IN) {
+                // 为全局统计添加全局入站入口节点计数
                 // Add count for global inbound entry node for global statistics.
                 Constants.ENTRY_NODE.increaseThreadNum();
                 Constants.ENTRY_NODE.addPassRequest(count);
             }
 
             // Handle pass event with registered entry callback handlers.
+            // 使用注册条目回调处理程序处理传递事件
             for (ProcessorSlotEntryCallback<DefaultNode> handler : StatisticSlotCallbackRegistry.getEntryCallbacks()) {
                 handler.onPass(context, resourceWrapper, node, count, args);
             }
         } catch (PriorityWaitException ex) {
+            // 抛出限流策略中，排队等待通过的请求,增加线程数,排队期间，通过数值应该是已经增加过了
             node.increaseThreadNum();
             if (context.getCurEntry().getOriginNode() != null) {
                 // Add count for origin node.
@@ -95,9 +101,10 @@ public class StatisticSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
             }
         } catch (BlockException e) {
             // Blocked, set block exception to current entry.
+            // 抛出block异常
             context.getCurEntry().setBlockError(e);
 
-            // Add block count.
+            // Add block count. 增加QPS的block数值
             node.increaseBlockQps(count);
             if (context.getCurEntry().getOriginNode() != null) {
                 context.getCurEntry().getOriginNode().increaseBlockQps(count);
@@ -109,6 +116,7 @@ public class StatisticSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
             }
 
             // Handle block event with registered entry callback handlers.
+            // 使用注册条目回调处理程序处理block传递事件
             for (ProcessorSlotEntryCallback<DefaultNode> handler : StatisticSlotCallbackRegistry.getEntryCallbacks()) {
                 handler.onBlocked(e, context, resourceWrapper, node, count, args);
             }
@@ -126,8 +134,11 @@ public class StatisticSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     public void exit(Context context, ResourceWrapper resourceWrapper, int count, Object... args) {
         Node node = context.getCurNode();
 
+        // exit里去统计相关请求的信息
+        // 未被block异常拦截
         if (context.getCurEntry().getBlockError() == null) {
             // Calculate response time (use completeStatTime as the time of completion).
+            // 计算rt时间
             long completeStatTime = TimeUtil.currentTimeMillis();
             context.getCurEntry().setCompleteTimestamp(completeStatTime);
             long rt = completeStatTime - context.getCurEntry().getCreateTimestamp();
@@ -135,6 +146,7 @@ public class StatisticSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
             Throwable error = context.getCurEntry().getError();
 
             // Record response time and success count.
+            // 记录响应时间和成功计数，当前线程数减一
             recordCompleteFor(node, count, rt, error);
             recordCompleteFor(context.getCurEntry().getOriginNode(), count, rt, error);
             if (resourceWrapper.getEntryType() == EntryType.IN) {
@@ -159,6 +171,7 @@ public class StatisticSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
         node.addRtAndSuccess(rt, batchCount);
         node.decreaseThreadNum();
 
+        // 存在异常且不是限流、熔断的异常，增加QPS异常数值，用于统计异常数，应该和熔断有关
         if (error != null && !(error instanceof BlockException)) {
             node.increaseExceptionQps(batchCount);
         }

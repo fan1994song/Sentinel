@@ -26,7 +26,7 @@ import java.util.List;
 
 /**
  * A processor slot that is responsible for flow control by frequent ("hot spot") parameters.
- *
+ * 热点参数限流策略认定在限流策略前面，根据order来
  * @author jialiang.linjl
  * @author Eric Zhao
  * @since 0.2.0
@@ -37,11 +37,13 @@ public class ParamFlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     @Override
     public void entry(Context context, ResourceWrapper resourceWrapper, DefaultNode node, int count,
                       boolean prioritized, Object... args) throws Throwable {
+        //  若热点参数限流不包含该资源，当前节点不进行任何操作
         if (!ParamFlowRuleManager.hasRules(resourceWrapper.getName())) {
             fireEntry(context, resourceWrapper, node, count, prioritized, args);
             return;
         }
 
+        // 校验是否命中热点参数限流
         checkFlow(resourceWrapper, count, args);
         fireEntry(context, resourceWrapper, node, count, prioritized, args);
     }
@@ -54,9 +56,11 @@ public class ParamFlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     void applyRealParamIdx(/*@NonNull*/ ParamFlowRule rule, int length) {
         int paramIdx = rule.getParamIdx();
         if (paramIdx < 0) {
+            // 负数配置应该是支持从后往前
             if (-paramIdx <= length) {
                 rule.setParamIdx(length + paramIdx);
             } else {
+                // 非法索引，给它一个非法的正数值，后者规则检查将通过
                 // Illegal index, give it a illegal positive value, latter rule checking will pass.
                 rule.setParamIdx(-paramIdx);
             }
@@ -64,20 +68,26 @@ public class ParamFlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     }
 
     void checkFlow(ResourceWrapper resourceWrapper, int count, Object... args) throws BlockException {
+        // 参数非空校验
         if (args == null) {
             return;
         }
+        // 资源存在热点配置校验
         if (!ParamFlowRuleManager.hasRules(resourceWrapper.getName())) {
             return;
         }
+        // 获取资源的热点限流规则
         List<ParamFlowRule> rules = ParamFlowRuleManager.getRulesOfResource(resourceWrapper.getName());
 
         for (ParamFlowRule rule : rules) {
+            // 将负数配置归正
             applyRealParamIdx(rule, args.length);
 
+            // 初始化参数度量
             // Initialize the parameter metrics.
             ParameterMetricStorage.initParamMetricsFor(resourceWrapper, rule);
 
+            // 热点限流校验
             if (!ParamFlowChecker.passCheck(resourceWrapper, rule, count, args)) {
                 String triggeredParam = "";
                 if (args.length > rule.getParamIdx()) {

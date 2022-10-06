@@ -13,49 +13,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alibaba.csp.sentinel.dashboard.rule;
-
-import java.util.List;
-import java.util.Set;
-
-import com.alibaba.csp.sentinel.dashboard.client.SentinelApiClient;
-import com.alibaba.csp.sentinel.dashboard.discovery.AppManagement;
-import com.alibaba.csp.sentinel.dashboard.discovery.MachineInfo;
-import com.alibaba.csp.sentinel.util.StringUtil;
+package com.alibaba.csp.sentinel.dashboard.rule.nacos;
 
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.FlowRuleEntity;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
+import com.alibaba.csp.sentinel.datasource.Converter;
+import com.alibaba.csp.sentinel.util.AssertUtil;
+import com.alibaba.nacos.api.config.ConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * @author Eric Zhao
  * @since 1.4.0
- * 注掉使用nacos的
  */
-//@Component("flowRuleDefaultPublisher")
-public class FlowRuleApiPublisher implements DynamicRulePublisher<List<FlowRuleEntity>> {
+//@Component("flowRuleNacosPublisher")
+public class FlowRuleNacosPublisher implements DynamicRulePublisher<List<FlowRuleEntity>> {
 
     @Autowired
-    private SentinelApiClient sentinelApiClient;
+    private ConfigService configService;
     @Autowired
-    private AppManagement appManagement;
+    private Converter<List<FlowRuleEntity>, String> converter;
 
     @Override
     public void publish(String app, List<FlowRuleEntity> rules) throws Exception {
-        if (StringUtil.isBlank(app)) {
-            return;
-        }
+        AssertUtil.notEmpty(app, "app name cannot be empty");
         if (rules == null) {
             return;
         }
-        Set<MachineInfo> set = appManagement.getDetailApp(app).getMachines();
-
-        for (MachineInfo machine : set) {
-            if (!machine.isHealthy()) {
-                continue;
-            }
-            // TODO: parse the results
-            sentinelApiClient.setFlowRuleOfMachine(app, machine.getIp(), machine.getPort(), rules);
-        }
+        configService.publishConfig(app + NacosConfigUtil.FLOW_DATA_ID_POSTFIX,
+            NacosConfigUtil.GROUP_ID, converter.convert(rules));
     }
 }
